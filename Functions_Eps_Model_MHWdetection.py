@@ -301,8 +301,8 @@ def summarize_uncertainty_eps(idata,  time_array):
     alpha_std = alpha_samples.std(dim=("chain", "draw")).values
     
     # # For epsilon coefficient (scalar)
-    #epsilon_samples = idata.posterior["epsilon"]
-    #epsilon_std = epsilon_samples.std(dim=("chain", "draw")).values
+    # epsilon_samples = idata.posterior["epsilon"]
+    # epsilon_std = epsilon_samples.std(dim=("chain", "draw")).values
 
     # For observation noise sigma(scalar)
     sigma_samples = idata.posterior["sigma"]
@@ -335,7 +335,7 @@ def summarize_uncertainty_eps(idata,  time_array):
         "seasonality_std": seasonality_std,
         "beta_std" : beta_std,
         "alpha_std": alpha_std,
-        "epsilon_std": epsilon_std,
+        # "epsilon_std": epsilon_std,
         "sigma_std": sigma_std,
         "mu_std": mu_std,
         "PTR_std": PTR_std,
