@@ -954,3 +954,9 @@ def plot_mhw_phases(T_obs, HPS, mhw_dict, ax, detection_threshold=50, ramp_thres
         ax.axvspan(core_end, end, color="green", alpha=0.3, label=dec_label, zorder = 0)
         
 
+
+
+
+
+
+
