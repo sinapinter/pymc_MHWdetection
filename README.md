@@ -22,6 +22,7 @@ This repository provides the full computational workflow used in the paper, incl
 
 The code is intended to ensure **reproducibility and transparency** of the results presented in the paper.
 
+---
 
 ### Requirements
 
@@ -43,7 +44,6 @@ The following Python packages are required to run the code:
 
 Standard Python libraries (`os`, `sys`, `datetime`, `collections`, `string`, `pickle`, etc.) do not require installation.
 
----
 
 ### Installation
 
