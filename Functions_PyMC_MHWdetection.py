@@ -287,7 +287,7 @@ def get_freq_seaslenght(time_array):
 
 
 
-def summarize_uncertainty_eps(idata,  time_array):
+def summarise_uncertainty(idata,  time_array):
     
     # For seasonality: average std across all dates (time dependent)
     seasonality_samples = idata.posterior["seasonality"]  # (chains, draws, date)
@@ -299,10 +299,6 @@ def summarize_uncertainty_eps(idata,  time_array):
     # For alpha (scalar)
     alpha_samples = idata.posterior["alpha"]
     alpha_std = alpha_samples.std(dim=("chain", "draw")).values
-    
-    # # For epsilon coefficient (scalar)
-    # epsilon_samples = idata.posterior["epsilon"]
-    # epsilon_std = epsilon_samples.std(dim=("chain", "draw")).values
 
     # For observation noise sigma(scalar)
     sigma_samples = idata.posterior["sigma"]
@@ -335,7 +331,6 @@ def summarize_uncertainty_eps(idata,  time_array):
         "seasonality_std": seasonality_std,
         "beta_std" : beta_std,
         "alpha_std": alpha_std,
-        # "epsilon_std": epsilon_std,
         "sigma_std": sigma_std,
         "mu_std": mu_std,
         "PTR_std": PTR_std,
@@ -650,9 +645,12 @@ def plot_probs_range(PR, time_array, ax, color = 'red', label = 'PTR', mean_line
 
 
 
-def detect_mhws_from_hps(HPS, T_obs, PCR, PTR, time=None, detection_threshold=50,  ramp_threshold=0.2,  max_dip=10,  min_duration=1):
+
+
+def detect_mhws_from_hps(HPS, T_obs, PCR, PTR, time=None, detection_threshold=50,  ramp_threshold=0.2,  max_dip=5,  min_duration=10, merge_gap = 5):
     """
     Detect marine heatwaves from HPS + observed SST + PCR posterior draws.
+    
 
     Parameters
     ----------
@@ -774,7 +772,7 @@ def detect_mhws_from_hps(HPS, T_obs, PCR, PTR, time=None, detection_threshold=50
         i = j + 1
 
     # after detecting events [(s, e), ...]
-    merge_gap = 14  # days allowed between events to merge
+    # merge_gap = 14  # days allowed between events to merge
     
     merged_events = []
     if events:
@@ -877,7 +875,7 @@ def detect_mhws_from_hps(HPS, T_obs, PCR, PTR, time=None, detection_threshold=50
         diff_p1  = T_event.values - p1_event.values
         diff_p99 = T_event.values - p99_event.values
 
-        def summarize(diff):
+        def summarise(diff):
             positive = np.where(diff > 0, diff, 0)
             return (
                 float(np.nanmax(positive)),
@@ -885,9 +883,9 @@ def detect_mhws_from_hps(HPS, T_obs, PCR, PTR, time=None, detection_threshold=50
                 float(np.nansum(positive))
             )
 
-        max50, mean50, cum50 = summarize(diff_p50)
-        max1, mean1, cum1    = summarize(diff_p1)
-        max99, mean99, cum99 = summarize(diff_p99)
+        max50, mean50, cum50 = summarise(diff_p50)
+        max1, mean1, cum1    = summarise(diff_p1)
+        max99, mean99, cum99 = summarise(diff_p99)
 
         # categories relative to PTR, baseline = pcr50
         cat_p50 =  classify_event(diff_p50, ptr50, p50_event)
@@ -959,4 +957,131 @@ def plot_mhw_phases(T_obs, HPS, mhw_dict, ax, detection_threshold=50, ramp_thres
 
 
 
+def add_stats_text(ax, data_weak, data_strong, color_weak='darkorange', color_strong='purple'):
+    """Helper to calculate stats and place text in the clearest spot."""
+    m_w, s_w = np.mean(data_weak), np.std(data_weak)
+    m_s, s_s = np.mean(data_strong), np.std(data_strong)
+    
+    stats_str = (f"Weak:   {m_w:.2f} ± {s_w:.2f}\n"
+                 f"Strong: {m_s:.2f} ± {s_s:.2f}")
+    
+    # Logic to decide left or right placement based on where the "bulk" of data is
+    x_min, x_max = ax.get_xlim()
+    midpoint = (x_min + x_max) / 2
+    x_pos = 0.95 if m_s < 0.7 else 0.05
+    ha = 'right' if m_s < 0.7 else 'left'
+    
+    ax.text(x_pos, 0.95, stats_str, transform=ax.transAxes, 
+            verticalalignment='top', horizontalalignment=ha,
+            fontsize=11, fontweight='bold',
+            bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+
+# def _color_and_title(color, title=None, **title_kwargs):
+#     """Helper for color and optional title styling."""
+#     return dict(
+#         color=color,
+#         title_kwargs=dict(
+#             color=color,
+#             **title_kwargs
+#         )
+#     )
+
+# def log_likelihood(y, mu, sigma):
+#     return np.sum(norm.logpdf(y, loc=mu, scale=sigma))
+
+# def rmse(y, yhat):
+#     return np.sqrt(np.mean((y - yhat)**2))
+
+
+# def pcr_width(PCR):
+#     return ( np.percentile(PCR, 0.95, axis=0)- np.percentile(PCR, 0.05, axis=0)).mean()
+
+
+# def pcr_coverage(PCR, hobday_true):
+#     lower = np.percentile(PCR, 0.01, axis=0)
+#     upper = np.percentile(PCR, 99.99, axis=0)
+
+#     return np.mean((hobday_true >= lower) & (hobday_true <= upper))
+
+
+def summarise_subset(df, years, long_mean):
+    """Return a dict summarising the subset period and SST context."""
+    
+    start = df.index.min()
+    end   = df.index.max()
+    meanT = df.Temp.mean()
+    
+    # Simple interpretation rule (you can refine later)
+    # long_mean = df.Temp.mean()
+    anomaly = meanT - long_mean
+    
+    if anomaly > 0.2:
+        comment = "warmer than average"
+    elif anomaly < -0.2:
+        comment = "cooler than average"
+    else:
+        comment = "near average"
+        
+    return {
+        "subset_years": years,
+        "start_date": start.date(),
+        "end_date": end.date(),
+        "mean_temp": round(meanT, 2),
+        "anomaly_vs_full": round(anomaly, 2),
+        "comment": comment
+    }
+
+
+def draw_bracket(ax, xspan, y, text=None, color="black", lw=1.5, text_offset=0.05):
+    """
+    Draw a horizontal bracket under a datetime x-axis span.
+    """
+    x0, x1 = xspan
+    ax.hlines(y, x0, x1, colors=color, lw=lw)  # horizontal line
+    ax.vlines([x0, x1], y, y + 0.15, colors=color, lw=lw)  # vertical ticks at ends
+
+    if text:
+        mid = x0 + (x1 - x0)/2
+        ax.text(mid, y - text_offset, text, ha='center', va='top', fontsize=12)
+
+
+
+
+
+def run_calibration_test(idata, true_data=None, target_prob=90):
+    """
+    Tests if a PyMC model is well-calibrated by checking how much of the 
+    actual data falls within the posterior predictive credible intervals.
+    """
+    # 1. Calculate the percentiles we want to check (e.g., 5th and 95th for a 90% band)
+    lower_perc = (100 - target_prob) / 2
+    upper_perc = 100 - lower_perc
+    
+    # 2. Extract the simulated timeseries (posterior predictive)
+    # This flattens the chains and draws into shape: (n_total_samples, n_time_steps)
+    ppc_samples = idata.posterior_predictive["likelihood"].values.reshape(
+        -1, idata.posterior_predictive["likelihood"].shape[-1]
+    )
+    
+    # 3. Calculate the lower and upper bounds for EVERY single day in the timeseries
+    lower_bound = np.percentile(ppc_samples, lower_perc, axis=0)
+    upper_bound = np.percentile(ppc_samples, upper_perc, axis=0)
+    
+    # 4. Get the actual observed data
+    if true_data is None:
+        # PyMC usually stores the actual observations here automatically
+        actuals = idata.observed_data["likelihood"].values
+    else:
+        actuals = np.array(true_data)
+        
+    # Ensure shapes match
+    actuals = np.squeeze(actuals)
+    
+    # 5. The Calibration Test: Count how many actuals fall inside the bounds
+    is_inside = (actuals >= lower_bound) & (actuals <= upper_bound)
+    actual_coverage = np.mean(is_inside) * 100
+    
+
+        
+    return actual_coverage, lower_bound, upper_bound
 
