@@ -1,6 +1,6 @@
 # Probabilistic Detection of Marine Heatwaves Using PyMC
 
-This repository contains all code and analysis scripts associated with the paper:
+This repository contains all code and analysis scripts from the paper:
 
 **“Making the Most of Little Time: A Probabilistic Approach to Marine Heatwave Detection”**  
 Sina Pinter¹², Matthew D. Rayson¹², and Nicole L. Jones¹²  
