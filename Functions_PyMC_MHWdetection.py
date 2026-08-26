@@ -30,7 +30,6 @@ sys.path.append('C:/Users/24048369/OneDrive - The University of Western Australi
 import marineHeatWavesCopy as mhw_hobday
 
 
-
 # ### Important Functions
 
 # In[3]:
@@ -99,6 +98,36 @@ def comparing_to_Hobday(df_hobday, ClimatologyPeriod = None):
     return mhws, clim, times_dates_mhw
 
 
+def comparing_to_Hobday_own_clim(df_hobday, own_clim_array, own_threshold):
+    """
+    df_hobday = pandas dataframe or Series with time index and 
+        temperture timeseries
+    """
+    
+    full_date_range = pd.date_range(start=df_hobday.index.min(), end=df_hobday.index.max(), freq='D')
+
+
+    # # Reindex DataFrame to include missing dates
+    df_reindex = df_hobday.reindex(full_date_range)
+    
+    # # Fill missing values using interpolation
+    df_reindex = df_reindex.interpolate()
+    
+
+    
+    sst  = np.array(df_reindex)
+    
+    # Create a regular daily time vector from 1 Jan 1992 to 31 Dec 2019
+    times_dates_mhw = df_reindex.index
+    t = np.array([times_dates_mhw[i].toordinal() for i in range(len(times_dates_mhw)) ])  # final daily time vector 
+    
+    
+    mhws, clim = mhw_hobday.detect(t, sst, alternateClimatology = own_clim_array, alternateThreshold = own_threshold,
+                               smoothPercentileWidth=31)
+
+    return mhws, clim, times_dates_mhw
+
+
 
 # Compute the empirical CDF using the full distribution of p90
 def empirical_cdf(value, samples):
@@ -136,7 +165,11 @@ def calculate_prob_PTR(og_timeseries, PTR, variable="Temp"):
         # Get observed value and apply empirical CDF against PTR
         obs_value = og_timeseries[variable].iloc[id_d_index].values
         prob = empirical_cdf(obs_value, PTR[:, id_ptr]) * 100
-        prob_PTR.append(prob)
+
+        if np.isnan(obs_value):
+            prob_PTR.append(np.nan)
+        else:
+            prob_PTR.append(prob)
 
     return prob_PTR
 
@@ -446,7 +479,32 @@ def climate_yearwise_dtw_similarity(data_slice,window_size, i ):
     return np.mean(distances)
 
 
+def climate_yearwise_dtw_similarity_subsurface(data_slice,window_size, i ):
+    data_slice = data_slice.copy()
+    data_slice.index = pd.to_datetime(data_slice.index)
+    
+   # Similarity via Pearson correlation of daily curves
+    daily_curves = []
+    for j in range(window_size):
+        start = f"{2009+i+j}-07-01"#f"{1994+i+j}-07-01"
+        end = f"{2009+i+j+1}-06-30"#f"{1994+i+j+1}-06-30"
+        
+        mask = (data_slice.index >= start) & (data_slice.index <= end)
+        df_sub = pd.DataFrame(data_slice.loc[mask].copy())
+        df_sub['doy'] = df_sub.index.dayofyear
+        # print(df_sub)
+        daily_curve = df_sub.groupby('doy')['Temp'].mean()
+        daily_curves.append(daily_curve)
+    
+    # print(daily_curves)
+    distances = []
+    for a in range(len(daily_curves)):
+        for b in range(a+1, len(daily_curves)):
+            # print(daily_curves[a], daily_curves[b])
+            d = calculate_dtw(daily_curves[a], daily_curves[b])
+            distances.append(d)
 
+    return np.mean(distances)
 
 
 def detect_peaks_minima_plateaus(climatology, flat_threshold=0.08,var = 'Climatology'):
@@ -1085,3 +1143,184 @@ def run_calibration_test(idata, true_data=None, target_prob=90):
         
     return actual_coverage, lower_bound, upper_bound
 
+
+
+
+
+
+
+def filter_events(mhw_dict, start, end):
+    """Return events from mhw_dict that overlap with given window."""
+    starts = pd.to_datetime(mhw_dict["date_start"])
+    ends = pd.to_datetime(mhw_dict["date_end"])
+
+    mask = (starts >= pd.to_datetime(start)) & (ends <= pd.to_datetime(end))
+    return {k: np.array(v)[mask] for k, v in mhw_dict.items() if isinstance(v, list)}
+
+def summarise_event(mhw_dict,method):
+    if len(mhw_dict["date_start"]) == 0:
+        return {"n_events": 0}
+
+    return {
+        "start": str(pd.to_datetime(mhw_dict["date_start"][0]).date()),
+        "end": str(pd.to_datetime(mhw_dict["date_end"][-1]).date()),
+        "n_events": int(len(mhw_dict["date_end"])),
+        "mean_intensity50": round(np.mean(mhw_dict["intensity_mean"]),  2),
+        "max_intensity50": round(np.max(mhw_dict["intensity_max"]),  2),
+        "cumulative_intensity50": round(np.sum(mhw_dict["intensity_cumulative"]),  2),
+        "total_duration": int(np.sum(mhw_dict["duration"])),
+        "method": method
+    }
+
+
+def summarise_event_hps(mhw_dict):
+    if len(mhw_dict["date_start"]) == 0:
+        return {"n_events": 0}
+
+    return {
+        "start": str(pd.to_datetime(mhw_dict["date_start"][0]).date()),
+        "end": str(pd.to_datetime(mhw_dict["date_end"][-1]).date()),
+        "n_events": int(len(mhw_dict["date_end"])),
+        "mean_intensity01": round(np.mean(mhw_dict["intensity_mean_p1"]), 2),
+        "mean_intensity50": round(np.mean(mhw_dict["intensity_mean_p50"]), 2),
+        "mean_intensity99": round(np.mean(mhw_dict["intensity_mean_p99"]), 2),
+        "max_intensity01": round(np.max(mhw_dict["intensity_max_p1"]), 2),
+        "max_intensity50": round(np.max(mhw_dict["intensity_max_p50"]), 2),
+        "max_intensity99": round(np.max(mhw_dict["intensity_max_p99"]), 2),
+        "cumulative_intensity01": round(np.sum(mhw_dict["intensity_cumulative_p1"]), 2),
+        "cumulative_intensity50": round(np.sum(mhw_dict["intensity_cumulative_p50"]), 2),
+        "cumulative_intensity99": round(np.sum(mhw_dict["intensity_cumulative_p99"]), 2),
+        "total_duration": int(np.sum(mhw_dict["duration"])),
+        "method": 'PyMC'
+    }
+
+
+def compare_methods(site, event_windows, mhw_dict_hobday_full,  mhw_dict_hps): #mhw_dict_hobday_sub
+    start, end = event_windows[site]
+
+    hobday_full_event = filter_events(mhw_dict_hobday_full, start, end)
+    # hobday_sub_event  = filter_events(mhw_dict_hobday_sub, start, end)
+    hps_event         = filter_events(mhw_dict_hps, start, end)
+
+    summary = {
+        "Hobday_full": summarise_event(hobday_full_event, 'Full 30yrs'),
+        "PyMC": summarise_event_hps(hps_event),
+    }
+
+    df = pd.DataFrame(summary).T  # methods as rows
+    df.index.name = "Method"
+    return df
+
+
+def _color_and_title(color, title=None, **title_kwargs):
+    """Helper for color and optional title styling."""
+    return dict(
+        color=color,
+        title_kwargs=dict(
+            color=color,
+            **title_kwargs
+        )
+    )
+
+
+
+
+ def run_hps_detection_sensitivity(
+        HPS,
+        PCR,
+        PTR,
+        og_timeseries,
+        detection_threshold=50,
+        ramp_threshold=20,
+        max_gap=5,
+        merge_gap=5):
+
+    mhw_dict = detect_mhws_from_hps(
+        HPS=np.array(HPS),
+        T_obs=og_timeseries.Temp,
+        PCR=PCR,
+        PTR=PTR,
+        time=og_timeseries.index,
+        detection_threshold=detection_threshold,
+        ramp_threshold=ramp_threshold,
+        max_dip=max_gap,
+        min_duration=5,
+        merge_gap=merge_gap
+    )
+
+    return mhw_dict
+
+
+def calculate_event_metrics(mhw_dict):
+
+    if len(mhw_dict["date_start"]) == 0:
+        return {
+            "n_events": 0,
+            "total_days": 0,
+            "mean_duration": 0,
+            "max_duration": 0
+        }
+
+    durations = (
+        pd.to_datetime(mhw_dict["date_end"]) -
+        pd.to_datetime(mhw_dict["date_start"])
+    ).days + 1
+
+    durations = np.asarray(durations)
+
+    
+    return {
+        "n_events": len(durations),
+        "total_days": durations.sum(),
+        "mean_duration": durations.mean(),
+        "max_duration": durations.max()
+    }
+
+
+
+def event_overlap(days1, days2):
+    intersection = len(days1.intersection(days2))
+    union = len(days1.union(days2))
+    return intersection / union
+
+
+
+
+def two_axis_plot(ax, x, df, x_label, title, default_value):
+    # ------------------------------------------------
+    # Axis 1: total days
+    # ------------------------------------------------
+    ax.plot( x,  df["total_days"], marker="o",  color = '0.2', )
+    ax.set_ylabel("Total MHW days", )
+    ax.tick_params(axis="y" )
+
+    # ------------------------------------------------
+    # Axis 4: number of events
+    # ------------------------------------------------
+    ax4 = ax.twinx()
+    ax4.plot(  x,  df["n_events"], marker="D",  color = 'forestgreen', linestyle="--",)
+    ax4.set_ylabel(  "Number of events"  )
+
+    # default parameter
+    ax.axvline(  default_value,  linestyle="--",  alpha=0.7  )
+    ax.set_xlabel(x_label)
+    ax.set_title( title, loc="left")
+    ax.grid(alpha=0.3)
+
+    # ------------------------------------------------
+    # Match tick and label colours to plotted lines
+    # ------------------------------------------------
+    axes = [ax, ax4]
+    line_colours = [  ax.lines[0].get_color(),  ax4.lines[0].get_color()]
+    for axis, colour in zip(axes, line_colours):
+        axis.yaxis.label.set_color(colour)
+        axis.tick_params(  axis="y", colors=colour )
+        axis.spines["right"].set_color(colour)
+
+
+
+def make_label(row):
+    if row["method"] == "Full 30yrs":
+        return "Hobday 30yrs"
+    else:
+        return f"{row['method']} {row['sub']}yrs"
