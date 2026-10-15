@@ -453,16 +453,19 @@ def calculate_dtw(series_a, series_b):
     distance, _ = fastdtw(series_a, series_b)
     return distance
 
-def climate_yearwise_dtw_similarity(data_slice,window_size, i ):
+def climate_yearwise_dtw_similarity(data_slice,window_size ):
     data_slice = data_slice.copy()
     data_slice.index = pd.to_datetime(data_slice.index)
-    
+
+    starting_year = data_slice.index[0].year
+    starting_month = data_slice.index[0].month
+    starting_day = data_slice.index[0].day
    # Similarity via Pearson correlation of daily curves
     daily_curves = []
     for j in range(window_size):
-        start = f"{1994+i+j}-07-01"
-        end = f"{1994+i+j+1}-06-30"
-        mask = (data_slice.index >= start) & (data_slice.index <= end)
+        start = f"{starting_year+j}-{starting_month}-{starting_day}"
+        end = f"{starting_year+j+1}-{starting_month}-{starting_day}"
+        mask = (data_slice.index >= start) & (data_slice.index < end)
         df_sub = pd.DataFrame(data_slice.loc[mask].copy())
         df_sub['doy'] = df_sub.index.dayofyear
         daily_curve = df_sub.groupby('doy')['Temp'].mean()
@@ -479,32 +482,7 @@ def climate_yearwise_dtw_similarity(data_slice,window_size, i ):
     return np.mean(distances)
 
 
-def climate_yearwise_dtw_similarity_subsurface(data_slice,window_size, i ):
-    data_slice = data_slice.copy()
-    data_slice.index = pd.to_datetime(data_slice.index)
-    
-   # Similarity via Pearson correlation of daily curves
-    daily_curves = []
-    for j in range(window_size):
-        start = f"{2009+i+j}-07-01"#f"{1994+i+j}-07-01"
-        end = f"{2009+i+j+1}-06-30"#f"{1994+i+j+1}-06-30"
-        
-        mask = (data_slice.index >= start) & (data_slice.index <= end)
-        df_sub = pd.DataFrame(data_slice.loc[mask].copy())
-        df_sub['doy'] = df_sub.index.dayofyear
-        # print(df_sub)
-        daily_curve = df_sub.groupby('doy')['Temp'].mean()
-        daily_curves.append(daily_curve)
-    
-    # print(daily_curves)
-    distances = []
-    for a in range(len(daily_curves)):
-        for b in range(a+1, len(daily_curves)):
-            # print(daily_curves[a], daily_curves[b])
-            d = calculate_dtw(daily_curves[a], daily_curves[b])
-            distances.append(d)
 
-    return np.mean(distances)
 
 
 def detect_peaks_minima_plateaus(climatology, flat_threshold=0.08,var = 'Climatology'):
@@ -1225,15 +1203,15 @@ def _color_and_title(color, title=None, **title_kwargs):
 
 
 
- def run_hps_detection_sensitivity(
-        HPS,
-        PCR,
-        PTR,
-        og_timeseries,
-        detection_threshold=50,
-        ramp_threshold=20,
-        max_gap=5,
-        merge_gap=5):
+def run_hps_detection_sensitivity(
+                                HPS,
+                                PCR,
+                                PTR,
+                                og_timeseries,
+                                detection_threshold=50,
+                                ramp_threshold=20,
+                                max_gap=5,
+                                merge_gap=5):
 
     mhw_dict = detect_mhws_from_hps(
         HPS=np.array(HPS),
